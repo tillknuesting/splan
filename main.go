@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -221,16 +222,88 @@ func mutate(chromosome Chromosome, teachers []*Teacher, rooms []*Room, timeSlots
 	return chromosome
 }
 
-// PrintTimetable prints the details of a given timetable
 func PrintTimetable(timetable Chromosome) {
-	fmt.Println("Timetable:")
+	// Define the structure for the timetable
+	days := []string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
+	times := []string{"08:00-10:00", "10:30-11:30", "11:30-12:30", "13:30-14:30", "14:30-15:30"}
+	grid := make(map[string]map[string][]string) // Use slices of strings for multiline cells
+
+	// Initialize grid with empty values
+	for _, day := range days {
+		grid[day] = make(map[string][]string)
+		for _, time := range times {
+			grid[day][time] = []string{"Free"}
+		}
+	}
+
+	// Populate the grid with class details
 	for _, gene := range timetable.Genes {
 		class := gene.ClassAssignment
-		fmt.Printf("Subject: %s, Teacher: %s, Room: %s, Time: %s to %s, Day: %s\n",
-			class.Subject, class.Teacher.Name, class.Room.ID,
-			class.TimeSlot.Start.Format("15:04"), class.TimeSlot.End.Format("15:04"),
-			class.TimeSlot.Day)
+		day := class.TimeSlot.Day.String()
+		timeRange := class.TimeSlot.Start.Format("15:04") + "-" + class.TimeSlot.End.Format("15:04")
+		details := class.Subject + " (T: " + class.Teacher.Name + ", R: " + class.Room.ID + ")"
+		grid[day][timeRange] = splitIntoLines(details, 19) // Split details into lines of up to 19 characters
 	}
+
+	// Print the timetable in a grid format
+	fmt.Println("\nTimetable:")
+	printLine := func() { fmt.Println(strings.Repeat("-", 107)) }
+	printLine()
+
+	// Print the header row
+	fmt.Printf("| %-10s |", "Time/Day")
+	for _, day := range days {
+		fmt.Printf(" %-19s |", day)
+	}
+	fmt.Println()
+	printLine()
+
+	// Print the timetable rows
+	for _, time := range times {
+		maxLines := getMaxLines(grid, time, days)
+		for i := 0; i < maxLines; i++ {
+			if i == 0 {
+				fmt.Printf("| %-10s |", time) // Print the time slot only on the first line
+			} else {
+				fmt.Printf("| %-10s |", "") // Empty space for subsequent lines
+			}
+			for _, day := range days {
+				if i < len(grid[day][time]) {
+					fmt.Printf(" %-19s |", grid[day][time][i])
+				} else {
+					fmt.Printf(" %-19s |", "") // Fill empty space if no more lines
+				}
+			}
+			fmt.Println()
+		}
+		printLine()
+	}
+}
+
+// splitIntoLines splits a string into lines of maximum specified length
+func splitIntoLines(s string, maxLen int) []string {
+	var lines []string
+	for len(s) > 0 {
+		if len(s) > maxLen {
+			lines = append(lines, s[:maxLen])
+			s = s[maxLen:]
+		} else {
+			lines = append(lines, s)
+			break
+		}
+	}
+	return lines
+}
+
+// getMaxLines returns the maximum number of lines needed for a given time slot across all days
+func getMaxLines(grid map[string]map[string][]string, time string, days []string) int {
+	maxLines := 0
+	for _, day := range days {
+		if len(grid[day][time]) > maxLines {
+			maxLines = len(grid[day][time])
+		}
+	}
+	return maxLines
 }
 
 func main() {
@@ -251,9 +324,40 @@ func main() {
 		{
 			ID:        "T3",
 			Name:      "Mr. Williams",
-			Subjects:  []string{"English"},
+			Subjects:  []string{"English", "Literature"},
 			Available: []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
 		},
+		{
+			ID:        "T4",
+			Name:      "Ms. Brown",
+			Subjects:  []string{"Chemistry", "Biology"},
+			Available: []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
+		},
+		{
+			ID:        "T5",
+			Name:      "Mr. Green",
+			Subjects:  []string{"Physical Education", "Health"},
+			Available: []time.Weekday{time.Tuesday, time.Thursday, time.Friday},
+		},
+		{
+			ID:        "T6",
+			Name:      "Ms. Davis",
+			Subjects:  []string{"Art", "Music"},
+			Available: []time.Weekday{time.Monday, time.Wednesday, time.Friday},
+		},
+		{
+			ID:        "T7",
+			Name:      "Mr. Wilson",
+			Subjects:  []string{"Computer Science", "Mathematics"},
+			Available: []time.Weekday{time.Tuesday, time.Thursday},
+		},
+		{
+			ID:        "T8",
+			Name:      "Ms. Taylor",
+			Subjects:  []string{"Foreign Language", "Geography"},
+			Available: []time.Weekday{time.Monday, time.Wednesday, time.Friday},
+		},
+		// Additional teachers can be added for more subject variety or to cover any gaps
 	}
 
 	// Sample Rooms
@@ -263,20 +367,48 @@ func main() {
 		{ID: "R103", Capacity: 30},
 		{ID: "R104", Capacity: 30},
 		{ID: "R105", Capacity: 30},
+		{ID: "R106", Capacity: 30},
+		{ID: "R107", Capacity: 30},
+		{ID: "R108", Capacity: 30},
+		{ID: "R109", Capacity: 30},
 	}
 
-	// Sample Time Slots
-	morningStart := time.Date(0, 0, 0, 8, 50, 0, 0, time.UTC)
-	morningEnd := time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC)
-	afternoonStart := time.Date(0, 0, 0, 13, 0, 0, 0, time.UTC)
-	afternoonEnd := time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC)
-
+	// Adjusted Time Slots
 	timeSlots := []*TimeSlot{
-		{Day: time.Monday, Start: morningStart, End: morningEnd},
-		{Day: time.Tuesday, Start: afternoonStart, End: afternoonEnd},
-		{Day: time.Wednesday, Start: morningStart, End: morningEnd},
-		{Day: time.Thursday, Start: afternoonStart, End: afternoonEnd},
-		{Day: time.Friday, Start: morningStart, End: morningEnd},
+		// Monday
+		{Day: time.Monday, Start: time.Date(0, 0, 0, 8, 0, 0, 0, time.UTC), End: time.Date(0, 0, 0, 10, 0, 0, 0, time.UTC)},
+		{Day: time.Monday, Start: time.Date(0, 0, 0, 10, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC)},
+		{Day: time.Monday, Start: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC)},
+		{Day: time.Monday, Start: time.Date(0, 0, 0, 13, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC)},
+		{Day: time.Monday, Start: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 15, 30, 0, 0, time.UTC)},
+
+		// Tuesday
+		{Day: time.Tuesday, Start: time.Date(0, 0, 0, 8, 0, 0, 0, time.UTC), End: time.Date(0, 0, 0, 10, 0, 0, 0, time.UTC)},
+		{Day: time.Tuesday, Start: time.Date(0, 0, 0, 10, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC)},
+		{Day: time.Tuesday, Start: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC)},
+		{Day: time.Tuesday, Start: time.Date(0, 0, 0, 13, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC)},
+		{Day: time.Tuesday, Start: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 15, 30, 0, 0, time.UTC)},
+
+		// Wednesday
+		{Day: time.Wednesday, Start: time.Date(0, 0, 0, 8, 0, 0, 0, time.UTC), End: time.Date(0, 0, 0, 10, 0, 0, 0, time.UTC)},
+		{Day: time.Wednesday, Start: time.Date(0, 0, 0, 10, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC)},
+		{Day: time.Wednesday, Start: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC)},
+		{Day: time.Wednesday, Start: time.Date(0, 0, 0, 13, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC)},
+		{Day: time.Wednesday, Start: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 15, 30, 0, 0, time.UTC)},
+
+		// Thursday
+		{Day: time.Thursday, Start: time.Date(0, 0, 0, 8, 0, 0, 0, time.UTC), End: time.Date(0, 0, 0, 10, 0, 0, 0, time.UTC)},
+		{Day: time.Thursday, Start: time.Date(0, 0, 0, 10, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC)},
+		{Day: time.Thursday, Start: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC)},
+		{Day: time.Thursday, Start: time.Date(0, 0, 0, 13, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC)},
+		{Day: time.Thursday, Start: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 15, 30, 0, 0, time.UTC)},
+
+		// Friday
+		{Day: time.Friday, Start: time.Date(0, 0, 0, 8, 0, 0, 0, time.UTC), End: time.Date(0, 0, 0, 10, 0, 0, 0, time.UTC)},
+		{Day: time.Friday, Start: time.Date(0, 0, 0, 10, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC)},
+		{Day: time.Friday, Start: time.Date(0, 0, 0, 11, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC)},
+		{Day: time.Friday, Start: time.Date(0, 0, 0, 13, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC)},
+		{Day: time.Friday, Start: time.Date(0, 0, 0, 14, 30, 0, 0, time.UTC), End: time.Date(0, 0, 0, 15, 30, 0, 0, time.UTC)},
 	}
 
 	// Sample Classes (initially without assignments)
@@ -285,15 +417,26 @@ func main() {
 		{Subject: "History"},
 		{Subject: "Physics"},
 		{Subject: "English"},
+		{Subject: "Biology"},
+		{Subject: "Chemistry"},
+		{Subject: "Computer Science"},
+		{Subject: "Physical Education"},
+		{Subject: "Art"},
+		{Subject: "Music"},
+		{Subject: "Foreign Language"}, // You can specify particular languages like Spanish, French, etc.
+		{Subject: "Geography"},
+		{Subject: "Literature"},
 		// Add more classes as needed
 	}
 
 	// Random seed for random number generation
 	rand.Seed(time.Now().UnixNano())
 
+	populationSize := 10 // Maintaining a constant population size
+
 	// Initialize a population of timetables
 	var population Population
-	for i := 0; i < 10; i++ { // Example: population size of 10
+	for i := 0; i < populationSize; i++ { // Example: population size of 10
 		population.Timetables = append(population.Timetables, initializeRandomTimetable(classes, teachers, rooms, timeSlots))
 	}
 
@@ -301,14 +444,17 @@ func main() {
 	for i, timetable := range population.Timetables {
 		fitness := calculateFitness(timetable, classes)
 		fmt.Printf("Timetable %d: Fitness = %d\n", i+1, fitness)
+		if fitness == 0 {
+			fmt.Println("Timetable is valid!")
+			return
+		}
 	}
 
 	// Define the number of generations for the GA to run
-	numGenerations := 5
+	numGenerations := 25
 
 	// Parameters for the genetic algorithm
-	tournamentSize := 3  // Example: size of tournament for selection
-	populationSize := 10 // Maintaining a constant population size
+	tournamentSize := 5 // Example: size of tournament for selection
 
 	mutationRate := 0.05 // For example, 5% mutation rate
 
@@ -317,16 +463,30 @@ func main() {
 		// Selection, Crossover, and Mutation
 		population = CreateNewGeneration(population, tournamentSize, populationSize, classes, teachers, rooms, timeSlots, mutationRate)
 
+		// Initialize variable to track the best fitness in this generation
+		bestFitnessInGeneration := -100000000
+
 		// Evaluate the new generation
-		bestFitness := calculateFitness(population.Timetables[1], classes)
-		fmt.Printf("Generation %d: Best Fitness = %d\n", generation+1, bestFitness)
+		for _, timetable := range population.Timetables {
+			currentFitness := calculateFitness(timetable, classes)
+
+			// Check if current timetable has the best fitness so far in this generation
+			if currentFitness > bestFitnessInGeneration {
+				bestFitnessInGeneration = currentFitness
+			}
+		}
+
+		// Print the best fitness of this generation
+		fmt.Printf("Generation %d: Best Fitness = %d\n", generation+1, bestFitnessInGeneration)
 	}
 
 	bestTimetableIndex := 0
-	bestFitness := calculateFitness(population.Timetables[0], classes)
+	bestFitness := -100000000
 	for i, timetable := range population.Timetables {
 		currentFitness := calculateFitness(timetable, classes)
+		fmt.Println("Fitness of Timetable", i+1, ":", currentFitness)
 		if currentFitness > bestFitness {
+			fmt.Println("New best fitness found:", currentFitness)
 			bestFitness = currentFitness
 			bestTimetableIndex = i
 		}
