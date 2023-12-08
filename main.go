@@ -451,12 +451,14 @@ func main() {
 	}
 
 	// Define the number of generations for the GA to run
-	numGenerations := 25
+	numGenerations := 300000
 
 	// Parameters for the genetic algorithm
-	tournamentSize := 5 // Example: size of tournament for selection
+	tournamentSize := 4 // Example: size of tournament for selection
 
-	mutationRate := 0.05 // For example, 5% mutation rate
+	mutationRate := 0.10 // For example, 10% mutation rate
+
+	bestFitnessAllGenerations := -100000000
 
 	// Genetic Algorithm Loop
 	for generation := 0; generation < numGenerations; generation++ {
@@ -468,31 +470,37 @@ func main() {
 
 		// Evaluate the new generation
 		for _, timetable := range population.Timetables {
+			timetable := timetable
 			currentFitness := calculateFitness(timetable, classes)
 
 			// Check if current timetable has the best fitness so far in this generation
 			if currentFitness > bestFitnessInGeneration {
 				bestFitnessInGeneration = currentFitness
+				// Check if current timetable has the best fitness so far in all generations
+				if currentFitness > bestFitnessAllGenerations {
+					bestFitnessAllGenerations = currentFitness
+					fmt.Printf("Generation %d: Best Fitness = %d\n", generation+1, bestFitnessAllGenerations)
+				}
 			}
 		}
 
-		// Print the best fitness of this generation
-		fmt.Printf("Generation %d: Best Fitness = %d\n", generation+1, bestFitnessInGeneration)
+		// Print the best fitness of this generation and the best fitness so far in all generations
+		//fmt.Printf("Generation %d: Best Fitness = %d, Best Fitness So Far = %d\n", generation+1, bestFitnessInGeneration, bestFitnessAllGenerations)
 	}
 
-	bestTimetableIndex := 0
-	bestFitness := -100000000
-	for i, timetable := range population.Timetables {
-		currentFitness := calculateFitness(timetable, classes)
-		fmt.Println("Fitness of Timetable", i+1, ":", currentFitness)
-		if currentFitness > bestFitness {
-			fmt.Println("New best fitness found:", currentFitness)
-			bestFitness = currentFitness
-			bestTimetableIndex = i
-		}
-	}
-
-	fmt.Println("Best Timetable:")
-	PrintTimetable(population.Timetables[bestTimetableIndex])
+	//bestTimetableIndex := 0
+	//bestFitness := -100000000
+	//for i, timetable := range population.Timetables {
+	//	currentFitness := calculateFitness(timetable, classes)
+	//	fmt.Println("Fitness of Timetable", i+1, ":", currentFitness)
+	//	if currentFitness > bestFitness {
+	//		fmt.Println("New best fitness found:", currentFitness)
+	//		bestFitness = currentFitness
+	//		bestTimetableIndex = i
+	//	}
+	//}
+	//
+	//fmt.Println("Best Timetable:")
+	//PrintTimetable(population.Timetables[bestTimetableIndex])
 
 }
