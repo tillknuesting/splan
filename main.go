@@ -3,7 +3,11 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -122,10 +126,10 @@ func calculateFitness(chromosome Chromosome, classes []*Class) int {
 			if i != j {
 				if timeSlotsOverlap(gene1.ClassAssignment.TimeSlot, gene2.ClassAssignment.TimeSlot) {
 					if gene1.ClassAssignment.Teacher.ID == gene2.ClassAssignment.Teacher.ID {
-						fitness -= 10 // Significantly penalize teacher conflict
+						fitness -= 20 // Significantly penalize teacher conflict
 					}
 					if gene1.ClassAssignment.Room.ID == gene2.ClassAssignment.Room.ID {
-						fitness-- // Room conflict
+						fitness -= 20 // Room conflict
 					}
 				}
 			}
@@ -222,90 +226,6 @@ func mutate(chromosome Chromosome, teachers []*Teacher, rooms []*Room, timeSlots
 	return chromosome
 }
 
-func PrintTimetable(timetable Chromosome) {
-	// Define the structure for the timetable
-	days := []string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
-	times := []string{"08:00-10:00", "10:30-11:30", "11:30-12:30", "13:30-14:30", "14:30-15:30"}
-	grid := make(map[string]map[string][]string) // Use slices of strings for multiline cells
-
-	// Initialize grid with empty values
-	for _, day := range days {
-		grid[day] = make(map[string][]string)
-		for _, time := range times {
-			grid[day][time] = []string{"Free"}
-		}
-	}
-
-	// Populate the grid with class details
-	for _, gene := range timetable.Genes {
-		class := gene.ClassAssignment
-		day := class.TimeSlot.Day.String()
-		timeRange := class.TimeSlot.Start.Format("15:04") + "-" + class.TimeSlot.End.Format("15:04")
-		details := class.Subject + " (T: " + class.Teacher.Name + ", R: " + class.Room.ID + ")"
-		grid[day][timeRange] = splitIntoLines(details, 19) // Split details into lines of up to 19 characters
-	}
-
-	// Print the timetable in a grid format
-	fmt.Println("\nTimetable:")
-	printLine := func() { fmt.Println(strings.Repeat("-", 107)) }
-	printLine()
-
-	// Print the header row
-	fmt.Printf("| %-10s |", "Time/Day")
-	for _, day := range days {
-		fmt.Printf(" %-19s |", day)
-	}
-	fmt.Println()
-	printLine()
-
-	// Print the timetable rows
-	for _, time := range times {
-		maxLines := getMaxLines(grid, time, days)
-		for i := 0; i < maxLines; i++ {
-			if i == 0 {
-				fmt.Printf("| %-10s |", time) // Print the time slot only on the first line
-			} else {
-				fmt.Printf("| %-10s |", "") // Empty space for subsequent lines
-			}
-			for _, day := range days {
-				if i < len(grid[day][time]) {
-					fmt.Printf(" %-19s |", grid[day][time][i])
-				} else {
-					fmt.Printf(" %-19s |", "") // Fill empty space if no more lines
-				}
-			}
-			fmt.Println()
-		}
-		printLine()
-	}
-}
-
-// splitIntoLines splits a string into lines of maximum specified length
-func splitIntoLines(s string, maxLen int) []string {
-	var lines []string
-	for len(s) > 0 {
-		if len(s) > maxLen {
-			lines = append(lines, s[:maxLen])
-			s = s[maxLen:]
-		} else {
-			lines = append(lines, s)
-			break
-		}
-	}
-	return lines
-}
-
-// getMaxLines returns the maximum number of lines needed for a given time slot across all days
-func getMaxLines(grid map[string]map[string][]string, time string, days []string) int {
-	maxLines := 0
-	for _, day := range days {
-		if len(grid[day][time]) > maxLines {
-			maxLines = len(grid[day][time])
-		}
-	}
-	return maxLines
-}
-
 func main() {
 	// Sample Teachers
 	teachers := []*Teacher{
@@ -357,7 +277,24 @@ func main() {
 			Subjects:  []string{"Foreign Language", "Geography"},
 			Available: []time.Weekday{time.Monday, time.Wednesday, time.Friday},
 		},
-		// Additional teachers can be added for more subject variety or to cover any gaps
+		{
+			ID:        "T9",
+			Name:      "Mr. Anderson",
+			Subjects:  []string{"History", "Geography", "Foreign Language", "Literature", "English", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education", "Health", "Art", "Music"},
+			Available: []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
+		},
+		{
+			ID:        "T10",
+			Name:      "Mr. Peters",
+			Subjects:  []string{"History", "Geography", "Foreign Language", "Literature", "English", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education", "Health", "Art", "Music"},
+			Available: []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
+		},
+		{
+			ID:        "T11",
+			Name:      "Mr. Meier",
+			Subjects:  []string{"History", "Geography", "Foreign Language", "Literature", "English", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education", "Health", "Art", "Music"},
+			Available: []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
+		},
 	}
 
 	// Sample Rooms
@@ -432,10 +369,11 @@ func main() {
 	// Random seed for random number generation
 	rand.Seed(time.Now().UnixNano())
 
-	populationSize := 10 // Maintaining a constant population size
+	populationSize := 100000 // Maintaining a constant population size
 
-	// Initialize a population of timetables
 	var population Population
+	population.Timetables = make([]Chromosome, 0, populationSize)
+
 	for i := 0; i < populationSize; i++ { // Example: population size of 10
 		population.Timetables = append(population.Timetables, initializeRandomTimetable(classes, teachers, rooms, timeSlots))
 	}
@@ -443,22 +381,23 @@ func main() {
 	// Calculate and display the fitness of each timetable in the population
 	for i, timetable := range population.Timetables {
 		fitness := calculateFitness(timetable, classes)
-		fmt.Printf("Timetable %d: Fitness = %d\n", i+1, fitness)
-		if fitness == 0 {
-			fmt.Println("Timetable is valid!")
-			return
+		if fitness > -10 {
+			fmt.Printf("Timetable %d: Fitness = %d\n", i+1, fitness)
+
 		}
 	}
 
 	// Define the number of generations for the GA to run
-	numGenerations := 300000
+	numGenerations := 100
 
 	// Parameters for the genetic algorithm
-	tournamentSize := 4 // Example: size of tournament for selection
+	tournamentSize := 3 // Example: size of tournament for selection
 
-	mutationRate := 0.10 // For example, 10% mutation rate
+	mutationRate := 0.05 // For example, 10% mutation rate
 
 	bestFitnessAllGenerations := -100000000
+
+	var bestTimetable BestTimetable
 
 	// Genetic Algorithm Loop
 	for generation := 0; generation < numGenerations; generation++ {
@@ -480,27 +419,78 @@ func main() {
 				if currentFitness > bestFitnessAllGenerations {
 					bestFitnessAllGenerations = currentFitness
 					fmt.Printf("Generation %d: Best Fitness = %d\n", generation+1, bestFitnessAllGenerations)
+					bestTimetable.sync.Lock()
+					bestTimetable.Timetable = timetable
+					bestTimetable.FitnessScore = currentFitness
+					bestTimetable.sync.Unlock()
+					if currentFitness == 0 {
+						break
+					}
 				}
 			}
 		}
-
-		// Print the best fitness of this generation and the best fitness so far in all generations
-		//fmt.Printf("Generation %d: Best Fitness = %d, Best Fitness So Far = %d\n", generation+1, bestFitnessInGeneration, bestFitnessAllGenerations)
+		if bestFitnessInGeneration == 0 {
+			break
+		}
 	}
 
-	//bestTimetableIndex := 0
-	//bestFitness := -100000000
-	//for i, timetable := range population.Timetables {
-	//	currentFitness := calculateFitness(timetable, classes)
-	//	fmt.Println("Fitness of Timetable", i+1, ":", currentFitness)
-	//	if currentFitness > bestFitness {
-	//		fmt.Println("New best fitness found:", currentFitness)
-	//		bestFitness = currentFitness
-	//		bestTimetableIndex = i
-	//	}
-	//}
-	//
-	//fmt.Println("Best Timetable:")
-	//PrintTimetable(population.Timetables[bestTimetableIndex])
+	fmt.Println("Fitness Score:", bestTimetable.FitnessScore)
 
+	days := []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday}
+
+	var htmlOutput strings.Builder // Start of the HTML Table
+	htmlOutput.WriteString("<table border='1'>\n")
+	htmlOutput.WriteString("<thead>\n")
+	htmlOutput.WriteString("<tr><th>Day</th><th>Class</th><th>Teacher</th><th>Room(Capacity)</th><th>Time Slot</th></tr>\n")
+	htmlOutput.WriteString("</thead>\n")
+	htmlOutput.WriteString("<tbody>\n")
+
+	for _, day := range days {
+		// Step 1: Collect genes for the day
+		var genesForDay []*Gene // Replace GeneType with your actual gene struct type
+		for _, gene := range bestTimetable.Timetable.Genes {
+			if gene.ClassAssignment.TimeSlot.Day == day {
+				gene := gene
+				genesForDay = append(genesForDay, &gene)
+			}
+		}
+
+		// Step 2: Sort the genes based on timeslot start time
+		sort.Slice(genesForDay, func(i, j int) bool {
+			return genesForDay[i].ClassAssignment.TimeSlot.Start.Before(genesForDay[j].ClassAssignment.TimeSlot.Start)
+		})
+
+		// Step 3: Print the sorted genes
+		for _, gene := range genesForDay {
+			htmlOutput.WriteString("<tr>")
+			htmlOutput.WriteString("<td>" + gene.ClassAssignment.TimeSlot.Day.String() + "</td>")
+			htmlOutput.WriteString("<td>" + gene.ClassAssignment.Subject + "</td>")
+			htmlOutput.WriteString("<td>" + gene.ClassAssignment.Teacher.Name + "</td>")
+			htmlOutput.WriteString("<td>" + gene.ClassAssignment.Room.ID + "(" + strconv.Itoa(gene.ClassAssignment.Room.Capacity) + ")" + "</td>")
+			htmlOutput.WriteString("<td>" + gene.ClassAssignment.TimeSlot.Start.Format("15:04") + " - " +
+				gene.ClassAssignment.TimeSlot.End.Format("15:04") + "</td>")
+			htmlOutput.WriteString("</tr>\n")
+		}
+	}
+	htmlOutput.WriteString(strconv.Itoa(bestTimetable.FitnessScore))
+
+	//save to table.html
+	f, err := os.Create("table.html")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	l, err := f.WriteString(htmlOutput.String())
+	if err != nil {
+		fmt.Println(err)
+		f.Close()
+		return
+	}
+	fmt.Println(l, "bytes written successfully")
+}
+
+type BestTimetable struct {
+	sync         sync.Mutex
+	Timetable    Chromosome
+	FitnessScore int
 }
